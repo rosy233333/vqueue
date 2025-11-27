@@ -23,7 +23,7 @@ struct Slot<T> {
 impl<T, const N: usize> SlotArray<T, N> {
     /// Attempts to push a value into the slot array.
     /// Returns the index of the slot if successful, or an error if the array is full.
-    fn push_(&self, value: T) -> Result<usize, ()> {
+    fn push_(&self, value: T) -> Result<usize, T> {
         for i in 0..N {
             let Slot {
                 state,
@@ -49,7 +49,7 @@ impl<T, const N: usize> SlotArray<T, N> {
                 return Ok(i);
             }
         }
-        Err(())
+        Err(value)
     }
 
     fn get(&self, index: usize) -> Option<&T> {
@@ -134,7 +134,7 @@ impl<T, const N: usize> SlotArray<T, N> {
 
 impl<'a, T, const N: usize> SlotArray<T, N> {
     /// Pushes a value into the slot array and returns a `SlotRef` to it.
-    pub fn push(&'a self, value: T) -> Result<SlotRef<'a, T, N>, ()> {
+    pub fn push(&'a self, value: T) -> Result<SlotRef<'a, T, N>, T> {
         let index = self.push_(value)?;
         Ok(SlotRef { array: self, index })
     }
