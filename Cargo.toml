@@ -5,6 +5,7 @@ edition = "2024"
 description = "A queue management system, suitable for vDSO."
 
 [dependencies]
+lazyinit = "0.2.2"
 vdso_helper = { git = "https://github.com/rosy233333/vdso_crate_template.git" }
 # vdso_helper = { path = "../vdso_crate_template/vdso_helper" }
 
@@ -15,3 +16,4 @@ vdso_helper = { git = "https://github.com/rosy233333/vdso_crate_template.git" }
 [features]
 vdso = []
 default = ["vdso"]
+# default = []

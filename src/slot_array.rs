@@ -1,9 +1,11 @@
 use core::{
     cell::UnsafeCell,
-    mem::MaybeUninit,
+    mem::{ManuallyDrop, MaybeUninit},
     ops::Deref,
     sync::atomic::{AtomicU8, Ordering},
 };
+
+use crate::{ARRAY_LEN, QUEUE_LEN, deque::LockFreeDeque, get_queue_array, ipc_item::IPCItem};
 
 pub struct SlotArray<T, const N: usize> {
     slots: [Slot<T>; N],
@@ -23,7 +25,7 @@ struct Slot<T> {
 impl<T, const N: usize> SlotArray<T, N> {
     /// Attempts to push a value into the slot array.
     /// Returns the index of the slot if successful, or an error if the array is full.
-    fn push_(&self, value: T) -> Result<usize, T> {
+    fn push_(&self, value: T) -> Result<usize, ()> {
         for i in 0..N {
             let Slot {
                 state,
@@ -49,7 +51,7 @@ impl<T, const N: usize> SlotArray<T, N> {
                 return Ok(i);
             }
         }
-        Err(value)
+        Err(())
     }
 
     fn get(&self, index: usize) -> Option<&T> {
@@ -101,16 +103,26 @@ unsafe impl<T, const N: usize> Send for SlotArray<T, N> where T: Send {}
 // TODO: Make SlotRef can transfer across VSpaces.
 pub struct SlotRef<'a, T, const N: usize> {
     array: &'a SlotArray<T, N>,
-    index: usize,
+    pub(crate) index: usize,
 }
 
-impl<T, const N: usize> SlotRef<'static, T, N> {
+/// Conversions between `SlotRef` and usize IDs
+///
+/// When converting to an ID, the `SlotRef` will not be dropped
+/// until the ID is converted back to a `SlotRef`.
+/// (Similar to `Arc::into_raw` and `Arc::from_raw`)
+impl SlotRef<'static, LockFreeDeque<IPCItem, QUEUE_LEN>, ARRAY_LEN> {
     pub fn into_id(self) -> usize {
-        todo!()
+        let id = self.index;
+        let _ = ManuallyDrop::new(self);
+        id
     }
 
     pub unsafe fn from_id(id: usize) -> Self {
-        todo!()
+        Self {
+            array: get_queue_array(),
+            index: id,
+        }
     }
 }
 
@@ -134,7 +146,7 @@ impl<T, const N: usize> SlotArray<T, N> {
 
 impl<'a, T, const N: usize> SlotArray<T, N> {
     /// Pushes a value into the slot array and returns a `SlotRef` to it.
-    pub fn push(&'a self, value: T) -> Result<SlotRef<'a, T, N>, T> {
+    pub fn push(&'a self, value: T) -> Result<SlotRef<'a, T, N>, ()> {
         let index = self.push_(value)?;
         Ok(SlotRef { array: self, index })
     }
