@@ -5,7 +5,7 @@ use core::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use crate::{ARRAY_LEN, QUEUE_LEN, deque::LockFreeDeque, get_queue_array, ipc_item::IPCItem};
+use crate::{ARRAY_LEN, QUEUE_CAPACITY, deque::LockFreeDeque, get_queue_array, ipc_item::IPCItem};
 
 pub struct SlotArray<T, const N: usize> {
     slots: [Slot<T>; N],
@@ -111,7 +111,7 @@ pub struct SlotRef<'a, T, const N: usize> {
 /// When converting to an ID, the `SlotRef` will not be dropped
 /// until the ID is converted back to a `SlotRef`.
 /// (Similar to `Arc::into_raw` and `Arc::from_raw`)
-impl SlotRef<'static, LockFreeDeque<IPCItem, QUEUE_LEN>, ARRAY_LEN> {
+impl SlotRef<'static, LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN> {
     pub fn into_id(self) -> usize {
         let id = self.index;
         let _ = ManuallyDrop::new(self);

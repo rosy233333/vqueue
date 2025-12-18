@@ -135,8 +135,8 @@ impl<T, const CAPACITY: usize> LockFreeDeque<T, CAPACITY> {
                 }
                 Err(current_state) => {
                     // Slot is not empty
-                    if current_state == SLOT_WRITING {
-                        // Another thread is writing, wait a bit
+                    if current_state == SLOT_WRITING || current_state == SLOT_READING {
+                        // Another thread is writing or reading, wait a bit
                         for _ in 0..10 {
                             core::hint::spin_loop();
                         }
@@ -207,8 +207,8 @@ impl<T, const CAPACITY: usize> LockFreeDeque<T, CAPACITY> {
                 }
                 Err(current_state) => {
                     // Slot is not empty
-                    if current_state == SLOT_WRITING {
-                        // Another thread is writing, wait a bit
+                    if current_state == SLOT_WRITING || current_state == SLOT_READING {
+                        // Another thread is writing or reading, wait a bit
                         for _ in 0..10 {
                             core::hint::spin_loop();
                         }
@@ -274,8 +274,8 @@ impl<T, const CAPACITY: usize> LockFreeDeque<T, CAPACITY> {
                 }
                 Err(current_state) => {
                     // Slot is not empty
-                    if current_state == SLOT_WRITING {
-                        // Another thread is writing, wait a bit
+                    if current_state == SLOT_WRITING || current_state == SLOT_READING {
+                        // Another thread is writing or reading, wait a bit
                         for _ in 0..10 {
                             core::hint::spin_loop();
                         }
@@ -341,8 +341,8 @@ impl<T, const CAPACITY: usize> LockFreeDeque<T, CAPACITY> {
                 }
                 Err(current_state) => {
                     // Slot is not empty
-                    if current_state == SLOT_WRITING {
-                        // Another thread is writing, wait a bit
+                    if current_state == SLOT_WRITING || current_state == SLOT_READING {
+                        // Another thread is writing or reading, wait a bit
                         for _ in 0..10 {
                             core::hint::spin_loop();
                         }
@@ -410,11 +410,8 @@ impl<T, const CAPACITY: usize> LockFreeDeque<T, CAPACITY> {
                     }
                 }
                 Err(current_state) => {
-                    if current_state == SLOT_EMPTY {
-                        // Slot became empty, queue might be empty now
-                        return None;
-                    } else if current_state == SLOT_WRITING {
-                        // Slot is being written to, wait a bit
+                    if current_state == SLOT_WRITING || current_state == SLOT_READING {
+                        // Another thread is writing or reading, wait a bit
                         for _ in 0..10 {
                             core::hint::spin_loop();
                         }
@@ -484,11 +481,8 @@ impl<T, const CAPACITY: usize> LockFreeDeque<T, CAPACITY> {
                     }
                 }
                 Err(current_state) => {
-                    if current_state == SLOT_EMPTY {
-                        // Slot became empty, queue might be empty now
-                        return None;
-                    } else if current_state == SLOT_WRITING {
-                        // Slot is being written to, wait a bit
+                    if current_state == SLOT_WRITING || current_state == SLOT_READING {
+                        // Another thread is writing or reading, wait a bit
                         for _ in 0..10 {
                             core::hint::spin_loop();
                         }
@@ -1010,6 +1004,50 @@ mod tests {
             let s = consumer.join().unwrap();
             sum += s;
             assert_eq!(sum, (0..(3 * pad)).sum());
+        }
+    }
+
+    #[test]
+    fn test_push_pop() {
+        const WORKERS_PER_QUEUE: usize = 16;
+        const DATA_PER_WORKER: usize = 128;
+
+        let mut handles = vec::Vec::new();
+        let queue = Arc::new(LockFreeDeque::<usize, 4097>::new());
+
+        for worker_id in 0..WORKERS_PER_QUEUE {
+            let queue_c = queue.clone();
+            // let data_num_c = data_num.clone();
+            let handle = std::thread::spawn(move || {
+                for i in 0..DATA_PER_WORKER {
+                    queue_c.push_front(i).expect(
+                        std::format!("Failed to push data in worker {}, iter {}", worker_id, i)
+                            .as_str(),
+                    );
+                    // data_num_c.fetch_add(1, Ordering::AcqRel);
+                }
+                for i in 0..DATA_PER_WORKER {
+                    // let data_num = data_num_c.fetch_sub(1, Ordering::AcqRel);
+                    // if data_num < 0 {
+                    //     println!("data_num < 0 in queue {}, worker {}", queue_id, worker_id);
+                    //     while data_num_c.load(Ordering::Acquire) < 0 {}
+                    // }
+                    queue_c.pop_back().expect(
+                        std::format!("Failed to pop data in worker {}, iter {}", worker_id, i)
+                            .as_str(),
+                    );
+                    // let data = pop(queue_id).expect(
+                    //     std::format!(
+                    //         "Failed to pop data in queue {}, worker {}",
+                    //         queue_id,
+                    //         worker_id
+                    //     )
+                    //     .as_str(),
+                    // );
+                    // assert!(data.msg_type == 0);
+                }
+            });
+            handles.push(handle);
         }
     }
 }
