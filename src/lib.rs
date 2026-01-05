@@ -28,11 +28,15 @@ vdso_helper::vvar_data! {
 #[cfg(not(feature = "vdso"))]
 static QUEUE_ARRAY_ADDR: LazyInit<usize> = LazyInit::new();
 
+#[cfg(not(feature = "vdso"))]
+pub const QUEUE_ARRAY_SIZE: usize =
+    core::mem::size_of::<SlotArray<LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN>>();
+
 /// Set the address of the queue array.
 ///
 /// # Safety
 ///
-/// The address must refer to a `SlotArray` that is already initialized,
+/// The address must refer to a `SlotArray<LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN>` that is already initialized,
 /// and be valid for the lifetime of the program.
 ///
 /// Before calling other functions, `set_queue_array_addr` or `set_queue_array_addr_and_init`
