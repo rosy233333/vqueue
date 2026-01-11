@@ -37,6 +37,7 @@ fn main() {
                     let data = IPCItem {
                         sender: worker_id as u64,
                         msg_type: 0,
+                        rep_type: 0,
                         data: [i as u64; 8],
                     };
                     push(queue_id, data).expect(
