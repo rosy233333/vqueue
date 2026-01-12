@@ -39,7 +39,7 @@ impl<T, const N: usize> SlotArray<T, N> {
                 Ordering::Acquire,
             ) {
                 assert_eq!(prev, SLOT_EMPTY);
-                // Safe using `get` because we have exclusive access to this slot
+                // Safe using `get` because we have exclusive access to this slot by setting state to SLOT_PENDING
                 // Safe using `write` because we are initializing the slot
                 unsafe {
                     (&mut *prev_value.get()).write(value);
@@ -61,8 +61,13 @@ impl<T, const N: usize> SlotArray<T, N> {
             value,
         } = &self.slots[index];
         if state.load(Ordering::Acquire) == SLOT_READY {
-            // Safe because we have exclusive access to this slot
-            Some(unsafe { (&*value.get()).assume_init_ref() })
+            let res = Some(unsafe { (&*value.get()).assume_init_ref() });
+            if state.load(Ordering::Acquire) == SLOT_READY {
+                res
+            } else {
+                // state changed, return None
+                None
+            }
         } else {
             None
         }
@@ -82,7 +87,7 @@ impl<T, const N: usize> SlotArray<T, N> {
         let Slot { state, rc, value } = &self.slots[index];
         let prev = state.swap(SLOT_EMPTY, Ordering::AcqRel);
         assert_eq!(prev, SLOT_PENDING);
-        // Safe because we have exclusive access to this slot
+        // Safe because we have exclusive access to this slot by setting state to SLOT_PENDING
         unsafe {
             (&mut *value.get()).assume_init_drop();
         }
@@ -118,12 +123,50 @@ impl SlotRef<'static, LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN> {
         id
     }
 
+    /// # Safety
+    ///
+    /// The caller must ensure that the id is get from `SlotRef::into_id`.
+    ///
+    /// one id can only be converted back to one `SlotRef`.
     pub unsafe fn from_id(id: usize) -> Self {
+        assert!(id < ARRAY_LEN, "SlotRef::from_id: id out of bounds");
         Self {
             array: get_queue_array(),
             index: id,
         }
     }
+
+    // pub fn id(&self) -> usize {
+    //     self.index
+    // }
+
+    // /// error code:
+    // /// - 1: id out of bounds
+    // /// - 2: slot not ready
+    // pub fn try_from_id(id: usize) -> Result<Self, usize> {
+    //     if id >= ARRAY_LEN {
+    //         return Err(1); // id out of bounds
+    //     }
+    //     let array = get_queue_array();
+    //     let Slot { state, rc, value } = &array.slots[id];
+    //     if state
+    //         .compare_exchange(
+    //             SLOT_READY,
+    //             SLOT_PENDING,
+    //             Ordering::AcqRel,
+    //             Ordering::Acquire,
+    //         )
+    //         .is_err()
+    //     {
+    //         return Err(2); // slot not ready
+    //     }
+    //     rc.fetch_add(1, Ordering::AcqRel);
+    //     // with the above fetch_add, rc must be >= 1.
+    //     // so we can restore the state to SLOT_READY and return the SlotRef safely.
+    //     let old_state = state.swap(SLOT_READY, Ordering::AcqRel);
+    //     assert_eq!(old_state, SLOT_PENDING);
+    //     Ok(Self { array, index: id })
+    // }
 }
 
 unsafe impl<T: Sync, const N: usize> Send for SlotRef<'_, T, N> {}
