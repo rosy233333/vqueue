@@ -110,6 +110,15 @@ pub struct SlotRef<'a, T, const N: usize> {
     pub(crate) index: usize,
 }
 
+impl<'a, T, const N: usize> core::fmt::Debug for SlotRef<'a, T, N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SlotRef")
+            .field("array", &(self.array as *const SlotArray<T, N>))
+            .field("index", &self.index)
+            .finish()
+    }
+}
+
 /// Conversions between `SlotRef` and usize IDs
 ///
 /// When converting to an ID, the `SlotRef` will not be dropped
@@ -123,12 +132,14 @@ impl SlotRef<'static, LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN> {
         id
     }
 
+    /// 使用了`get_queue_array`的函数，只能通过API暴露给外界。
+    ///
     /// # Safety
     ///
     /// The caller must ensure that the id is get from `SlotRef::into_id`.
     ///
     /// one id can only be converted back to one `SlotRef`.
-    pub unsafe fn from_id(id: usize) -> Self {
+    pub(crate) unsafe fn from_id(id: usize) -> Self {
         assert!(id < ARRAY_LEN, "SlotRef::from_id: id out of bounds");
         Self {
             array: get_queue_array(),

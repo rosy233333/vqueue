@@ -35,3 +35,15 @@ pub extern "C" fn pop(queue_id: usize) -> Option<IPCItem> {
     slot_ref.into_id(); // prevent drop
     res
 }
+
+/// # Safety
+///
+/// The caller must ensure that the id is get from `SlotRef::into_id`.
+///
+/// one id can only be converted back to one `SlotRef`.
+#[unsafe(no_mangle)]
+pub extern "C" fn slotref_from_id(
+    queue_id: usize,
+) -> SlotRef<'static, LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN> {
+    unsafe { SlotRef::from_id(queue_id) }
+}
