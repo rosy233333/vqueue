@@ -105,7 +105,6 @@ impl<T, const N: usize> Default for SlotArray<T, N> {
 unsafe impl<T, const N: usize> Sync for SlotArray<T, N> where T: Sync {}
 unsafe impl<T, const N: usize> Send for SlotArray<T, N> where T: Send {}
 
-// TODO: Make SlotRef can transfer across VSpaces.
 pub struct SlotRef<'a, T, const N: usize> {
     array: &'a SlotArray<T, N>,
     pub(crate) index: usize,
@@ -119,7 +118,8 @@ pub struct SlotRef<'a, T, const N: usize> {
 impl SlotRef<'static, LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN> {
     pub fn into_id(self) -> usize {
         let id = self.index;
-        let _ = ManuallyDrop::new(self);
+        core::mem::forget(self);
+        // let _ = ManuallyDrop::new(self);
         id
     }
 
