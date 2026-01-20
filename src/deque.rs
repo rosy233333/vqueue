@@ -530,6 +530,12 @@ impl<T, const CAPACITY: usize> LockFreeDeque<T, CAPACITY> {
     }
 }
 
+impl<T, const CAPACITY: usize> Default for LockFreeDeque<T, CAPACITY> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T, const CAPACITY: usize> Drop for LockFreeDeque<T, CAPACITY> {
     fn drop(&mut self) {
         // Clean up any remaining items to prevent memory leaks

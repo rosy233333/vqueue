@@ -1,5 +1,6 @@
 #![no_std]
 
+use core::sync::atomic::{AtomicU64, AtomicUsize};
 #[cfg(not(feature = "vdso"))]
 use core::{mem::MaybeUninit, ptr::NonNull, sync::atomic::AtomicPtr};
 
@@ -20,23 +21,32 @@ pub use slot_array::SlotRef;
 vdso_helper::use_mut_cfg! {}
 pub const QUEUE_CAPACITY: usize = QUEUE_LEN + 1;
 
+#[derive(Default)]
+pub struct PerProcess {
+    /// IPC消息的接收队列
+    deque: LockFreeDeque<IPCItem, QUEUE_CAPACITY>,
+    /// 进程id，用于通知机制
+    pid: AtomicUsize,
+    /// 从msg_type（调度器协程id）到ntf_id（通知源id）的映射
+    map: SlotArray<(usize, usize), ARRAY_LEN>,
+}
+
 #[cfg(feature = "vdso")]
 vdso_helper::vvar_data! {
-    queue_array: SlotArray<LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN>,
+    queue_array: SlotArray<PerProcess, ARRAY_LEN>,
 }
 
 #[cfg(not(feature = "vdso"))]
 static QUEUE_ARRAY_ADDR: LazyInit<usize> = LazyInit::new();
 
 #[cfg(not(feature = "vdso"))]
-pub const QUEUE_ARRAY_SIZE: usize =
-    core::mem::size_of::<SlotArray<LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN>>();
+pub const QUEUE_ARRAY_SIZE: usize = core::mem::size_of::<SlotArray<PerProcess, ARRAY_LEN>>();
 
 /// Set the address of the queue array.
 ///
 /// # Safety
 ///
-/// The address must refer to a `SlotArray<LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN>` that is already initialized,
+/// The address must refer to a `SlotArray<PerProcess, ARRAY_LEN>` that is already initialized,
 /// and be valid for the lifetime of the program.
 ///
 /// Before calling other functions, `set_queue_array_addr` or `set_queue_array_addr_and_init`
@@ -58,14 +68,12 @@ pub unsafe fn set_queue_array_addr(addr: NonNull<()>) {
 pub unsafe fn set_queue_array_addr_and_init(addr: NonNull<()>) {
     QUEUE_ARRAY_ADDR.init_once(addr.as_ptr() as usize);
     unsafe {
-        ((*QUEUE_ARRAY_ADDR.get().unwrap()) as *mut ()
-            as *mut SlotArray<LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN>)
+        ((*QUEUE_ARRAY_ADDR.get().unwrap()) as *mut () as *mut SlotArray<PerProcess, ARRAY_LEN>)
             .write(SlotArray::new())
     };
 }
 
-pub(crate) fn get_queue_array()
--> &'static SlotArray<LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN> {
+pub(crate) fn get_queue_array() -> &'static SlotArray<PerProcess, ARRAY_LEN> {
     #[cfg(feature = "vdso")]
     {
         vdso_helper::get_vvar_data! {
@@ -78,7 +86,7 @@ pub(crate) fn get_queue_array()
             &*((*QUEUE_ARRAY_ADDR.get().expect(
                 "QUEUE_ARRAY_ADDR is not initialized. Please call `set_queue_array_addr` or `set_queue_array_addr_and_init` first.",
             )) as *const ()
-                as *const SlotArray<LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN>)
+                as *const SlotArray<PerProcess, ARRAY_LEN>)
         }
     }
 }

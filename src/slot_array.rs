@@ -5,7 +5,9 @@ use core::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use crate::{ARRAY_LEN, QUEUE_CAPACITY, deque::LockFreeDeque, get_queue_array, ipc_item::IPCItem};
+use crate::{
+    ARRAY_LEN, PerProcess, QUEUE_CAPACITY, deque::LockFreeDeque, get_queue_array, ipc_item::IPCItem,
+};
 
 pub struct SlotArray<T, const N: usize> {
     slots: [Slot<T>; N],
@@ -54,7 +56,7 @@ impl<T, const N: usize> SlotArray<T, N> {
         Err(())
     }
 
-    fn get(&self, index: usize) -> Option<&T> {
+    pub(crate) fn get(&self, index: usize) -> Option<&T> {
         let Slot {
             state,
             rc: _,
@@ -94,6 +96,22 @@ impl<T, const N: usize> SlotArray<T, N> {
         let rc = rc.load(Ordering::Acquire);
         assert_eq!(rc, 0);
     }
+
+    /// 释放一个引用计数恰好为1的槽位
+    ///
+    /// 仅用于特定用途
+    pub(crate) unsafe fn drop_slot(&self, index: usize) {
+        let Slot { state, rc, .. } = &self.slots[index];
+        let prev_rc = rc.fetch_sub(1, Ordering::AcqRel);
+        assert!(prev_rc == 1);
+
+        let prev_state = state.swap(SLOT_PENDING, Ordering::Release);
+        assert_eq!(prev_state, SLOT_READY);
+
+        unsafe {
+            self.delete(index);
+        }
+    }
 }
 
 impl<T, const N: usize> Default for SlotArray<T, N> {
@@ -124,7 +142,7 @@ impl<'a, T, const N: usize> core::fmt::Debug for SlotRef<'a, T, N> {
 /// When converting to an ID, the `SlotRef` will not be dropped
 /// until the ID is converted back to a `SlotRef`.
 /// (Similar to `Arc::into_raw` and `Arc::from_raw`)
-impl SlotRef<'static, LockFreeDeque<IPCItem, QUEUE_CAPACITY>, ARRAY_LEN> {
+impl SlotRef<'static, PerProcess, ARRAY_LEN> {
     pub fn into_id(self) -> usize {
         let id = self.index;
         core::mem::forget(self);
