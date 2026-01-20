@@ -72,7 +72,7 @@ pub extern "C" fn map_get_ntf_id(process_id: usize, msg_type: usize) -> Option<u
     let slot_ref: SlotRef<'_, PerProcess, ARRAY_LEN> = unsafe { SlotRef::from_id(process_id) };
     for i in 0..ARRAY_LEN {
         if let Some(&(this_msg_type, this_ntf_id)) = slot_ref.map.get(i) {
-            if this_msg_type == msg_type {
+            if this_msg_type == msg_type || this_msg_type == usize::MAX {
                 return Some(this_ntf_id);
             }
         }

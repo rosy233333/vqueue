@@ -28,6 +28,8 @@ pub struct PerProcess {
     /// 进程id，用于通知机制
     pid: AtomicUsize,
     /// 从msg_type（调度器协程id）到ntf_id（通知源id）的映射
+    ///
+    /// 若登记的msg_type为USIZE_MAX，则查找时视为任何msg_type均对应到这一项
     map: SlotArray<(usize, usize), ARRAY_LEN>,
 }
 
