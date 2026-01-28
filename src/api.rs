@@ -46,10 +46,29 @@ pub extern "C" fn slotref_from_id(process_id: usize) -> SlotRef<'static, PerProc
     unsafe { SlotRef::from_id(process_id) }
 }
 
+/// 获取先前使用`set_pid`设置的`pid`。
+///
+/// - `process_id`：使用`register_process`分配的pid
+/// - `pid`：调度模块中的进程id，用于通知机制
+#[unsafe(no_mangle)]
+pub extern "C" fn get_pid(process_id: usize) -> usize {
+    let slot_ref: SlotRef<'_, PerProcess, ARRAY_LEN> = unsafe { SlotRef::from_id(process_id) };
+    let res = slot_ref.pid.load(Ordering::Acquire);
+    slot_ref.into_id(); // prevent drop
+    res
+}
+
+/// 记录当前进程的`pid`。
+///
+/// 一些通知操作需要使用`get_pid`获取当前进程的`pid`，因此在此之前需要先调用该函数设置pid。
+///
+/// - `process_id`：使用`register_process`分配的pid
+/// - `pid`：调度模块中的进程id，用于通知机制
 #[unsafe(no_mangle)]
 pub extern "C" fn set_pid(process_id: usize, pid: usize) {
     let slot_ref: SlotRef<'_, PerProcess, ARRAY_LEN> = unsafe { SlotRef::from_id(process_id) };
     slot_ref.pid.store(pid, Ordering::Release);
+    slot_ref.into_id(); // prevent drop
 }
 
 /// 添加从msg_type（调度器协程id）到ntf_id（通知源id）的映射
@@ -61,9 +80,11 @@ pub extern "C" fn map_add_entry(
 ) -> Result<(), ()> {
     let slot_ref: SlotRef<'_, PerProcess, ARRAY_LEN> = unsafe { SlotRef::from_id(process_id) };
     let res = slot_ref.map.push((msg_type, ntf_id));
-    res.map(|sref| {
+    let res = res.map(|sref| {
         mem::forget(sref); // 保持引用计数
-    })
+    });
+    slot_ref.into_id(); // prevent drop
+    res
 }
 
 /// 根据msg_type（调度器协程id）查找ntf_id（通知源id）
@@ -73,10 +94,12 @@ pub extern "C" fn map_get_ntf_id(process_id: usize, msg_type: usize) -> Option<u
     for i in 0..ARRAY_LEN {
         if let Some(&(this_msg_type, this_ntf_id)) = slot_ref.map.get(i) {
             if this_msg_type == msg_type || this_msg_type == usize::MAX {
+                slot_ref.into_id(); // prevent drop
                 return Some(this_ntf_id);
             }
         }
     }
+    slot_ref.into_id(); // prevent drop
     None
 }
 
@@ -91,9 +114,11 @@ pub extern "C" fn map_pop_ntf_id(process_id: usize, msg_type: usize) -> Option<u
                 unsafe {
                     slot_ref.map.drop_slot(i);
                 }
+                slot_ref.into_id(); // prevent drop
                 return Some(this_ntf_id);
             }
         }
     }
+    slot_ref.into_id(); // prevent drop
     None
 }

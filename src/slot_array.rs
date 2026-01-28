@@ -137,6 +137,13 @@ impl<'a, T, const N: usize> core::fmt::Debug for SlotRef<'a, T, N> {
     }
 }
 
+impl<'a, T, const N: usize> SlotRef<'a, T, N> {
+    /// 调试用接口
+    pub fn rc(&self) -> u8 {
+        self.array.slots[self.index].rc.load(Ordering::Acquire)
+    }
+}
+
 /// Conversions between `SlotRef` and usize IDs
 ///
 /// When converting to an ID, the `SlotRef` will not be dropped
@@ -159,10 +166,15 @@ impl SlotRef<'static, PerProcess, ARRAY_LEN> {
     /// one id can only be converted back to one `SlotRef`.
     pub(crate) unsafe fn from_id(id: usize) -> Self {
         assert!(id < ARRAY_LEN, "SlotRef::from_id: id out of bounds");
-        Self {
-            array: get_queue_array(),
-            index: id,
-        }
+        let array = get_queue_array();
+        let Slot {
+            state,
+            rc,
+            value: _,
+        } = &array.slots[id];
+        assert_eq!(state.load(Ordering::Acquire), SLOT_READY);
+        assert!(rc.load(Ordering::Acquire) >= 1);
+        Self { array, index: id }
     }
 
     // pub fn id(&self) -> usize {
