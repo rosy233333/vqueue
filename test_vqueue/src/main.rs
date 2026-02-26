@@ -25,7 +25,7 @@ fn main() {
 
     let mut handles = Vec::new();
     for queue_id in 0..QUEUE_NUM {
-        let slot_ref = crate::api::register_queue().expect("Failed to register queue");
+        let slot_ref = crate::api::register_process().expect("Failed to register queue");
         assert!(slot_ref.into_id() == queue_id); // into_id prevents drop
     }
     for queue_id in 0..QUEUE_NUM {
@@ -40,7 +40,7 @@ fn main() {
                         rep_type: 0,
                         data: [i as u64; 8],
                     };
-                    push(queue_id, data).expect(
+                    deque_push(queue_id, data).expect(
                         format!(
                             "Failed to push data in queue {}, worker {}, iter {}",
                             queue_id, worker_id, i
@@ -55,7 +55,7 @@ fn main() {
                         println!("data_num < 0 in queue {}, worker {}", queue_id, worker_id);
                         while data_num_c.load(Ordering::Acquire) < 0 {}
                     }
-                    let data = pop(queue_id).expect(
+                    let data = deque_pop(queue_id).expect(
                         format!(
                             "Failed to pop data in queue {}, worker {}, iter {}",
                             queue_id, worker_id, i
