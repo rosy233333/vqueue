@@ -123,6 +123,9 @@ impl<T, const N: usize> Default for SlotArray<T, N> {
 unsafe impl<T, const N: usize> Sync for SlotArray<T, N> where T: Sync {}
 unsafe impl<T, const N: usize> Send for SlotArray<T, N> where T: Send {}
 
+/// 对应于`SlotArray`中一个槽位的引用，包含了槽位所在的数组和槽位的索引。
+///
+/// 通过引用计数管理槽位的释放。
 pub struct SlotRef<'a, T, const N: usize> {
     array: &'a SlotArray<T, N>,
     pub(crate) index: usize,
@@ -150,6 +153,7 @@ impl<'a, T, const N: usize> SlotRef<'a, T, N> {
 /// until the ID is converted back to a `SlotRef`.
 /// (Similar to `Arc::into_raw` and `Arc::from_raw`)
 impl SlotRef<'static, PerProcess, ARRAY_LEN> {
+    /// Converts a `SlotRef` into a usize ID.
     pub fn into_id(self) -> usize {
         let id = self.index;
         core::mem::forget(self);

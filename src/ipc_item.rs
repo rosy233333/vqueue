@@ -1,3 +1,6 @@
+//! `IPCItem`结构。
+
+/// 一条IPC消息的数据结构
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct IPCItem {

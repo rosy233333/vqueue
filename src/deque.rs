@@ -1,3 +1,5 @@
+//! 用于实现IPC队列的无锁双端队列（deque）数据结构，支持多生产者多消费者（MPMC）场景。
+//!
 //! Satety:
 //!     Work when the queue is full in the MPMC situation will cause error.
 //!
@@ -28,6 +30,7 @@ impl<T> Slot<T> {
     }
 }
 
+/// A guard that holds a slot for writing. The slot will be marked as ready when the guard is dropped.
 pub struct SlotGuard<'a, T> {
     slot: &'a Slot<T>,
 }
@@ -55,6 +58,7 @@ impl<'a, T> Drop for SlotGuard<'a, T> {
     }
 }
 
+/// A lock-free deque implementation with fixed capacity, supporting multiple producers and multiple consumers.
 pub struct LockFreeDeque<T, const CAPACITY: usize> {
     buffer: [Slot<T>; CAPACITY],
     head: AtomicUsize, // Points to the first element

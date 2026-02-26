@@ -1,3 +1,4 @@
+//! 通过vDSO访问的API，可以操作全局数据结构
 use core::mem;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
@@ -5,11 +6,13 @@ use crate::{ARRAY_LEN, IPCItem, LockFreeDeque, PerProcess, QUEUE_CAPACITY, SlotG
 
 use crate::get_queue_array;
 
+/// 注册当前进程，返回一个`SlotRef`，其中包含了当前进程的IPC数据结构。
 #[unsafe(no_mangle)]
 pub extern "C" fn register_process() -> Result<SlotRef<'static, PerProcess, ARRAY_LEN>, ()> {
     get_queue_array().push(PerProcess::default())
 }
 
+/// 向当前进程的IPC队列（`deque`）中推入一条消息。
 #[unsafe(no_mangle)]
 pub extern "C" fn deque_push(process_id: usize, item: IPCItem) -> Result<(), IPCItem> {
     let slot_ref: SlotRef<'_, PerProcess, ARRAY_LEN> = unsafe { SlotRef::from_id(process_id) };
@@ -28,6 +31,7 @@ pub extern "C" fn deque_push(process_id: usize, item: IPCItem) -> Result<(), IPC
 //     res
 // }
 
+/// 从当前进程的IPC队列（`deque`）中弹出一条消息。
 #[unsafe(no_mangle)]
 pub extern "C" fn deque_pop(process_id: usize) -> Option<IPCItem> {
     let slot_ref: SlotRef<'_, PerProcess, ARRAY_LEN> = unsafe { SlotRef::from_id(process_id) };
@@ -36,6 +40,10 @@ pub extern "C" fn deque_pop(process_id: usize) -> Option<IPCItem> {
     res
 }
 
+/// 从进程id获取对应的`SlotRef`，以操作`SlotRef`。
+///
+/// 当前，该接口只用于clone。
+///
 /// # Safety
 ///
 /// The caller must ensure that the id is get from `SlotRef::into_id`.

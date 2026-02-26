@@ -1,4 +1,8 @@
+//! 由vDSO管理的IPC队列等数据结构，通过vDSO实现了进程间共享。
+//! 其为每个进程存储了IPC队列、进程id，以及从调度器协程到通知源id的映射，用于实现IPC的消息传递与通知功能。
+
 #![no_std]
+#![deny(missing_docs)]
 
 use core::sync::atomic::{AtomicU64, AtomicUsize};
 #[cfg(not(feature = "vdso"))]
@@ -19,26 +23,30 @@ mod slot_array;
 pub use slot_array::SlotRef;
 
 vdso_helper::use_mut_cfg! {}
+/// 队列占用的空间，为队列长度加1，以区分满和空的情况
 pub const QUEUE_CAPACITY: usize = QUEUE_LEN + 1;
 
+/// 每个进程的IPC数据结构
 #[derive(Default)]
 pub struct PerProcess {
     /// IPC消息的接收队列
     deque: LockFreeDeque<IPCItem, QUEUE_CAPACITY>,
     /// 进程id，用于通知机制
     pid: AtomicUsize,
-    /// 从msg_type（调度器协程id）到ntf_id（通知源id）的映射
+    /// 从msg_type（调度器协程id）到ntf_id（通知源id，例如信号编号）的映射
     ///
     /// 若登记的msg_type为USIZE_MAX，则查找时视为任何msg_type均对应到这一项
     map: SlotArray<(usize, usize), ARRAY_LEN>,
 }
 
+// 存放于vDSO中的全局数据结构，包含每个进程的IPC数据结构数组
 #[cfg(feature = "vdso")]
 vdso_helper::vvar_data! {
     queue_array: SlotArray<PerProcess, ARRAY_LEN>,
 }
 
 #[cfg(not(feature = "vdso"))]
+/// 存储队列数组地址的全局变量
 static QUEUE_ARRAY_ADDR: LazyInit<usize> = LazyInit::new();
 
 #[cfg(not(feature = "vdso"))]
