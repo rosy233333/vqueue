@@ -21,6 +21,15 @@ pub extern "C" fn deque_push(process_id: usize, item: IPCItem) -> Result<(), IPC
     res
 }
 
+/// 检查当前进程的IPC队列（`deque`）是否为空。
+#[unsafe(no_mangle)]
+pub extern "C" fn deque_is_empty(process_id: usize) -> bool {
+    let slot_ref: SlotRef<'_, PerProcess, ARRAY_LEN> = unsafe { SlotRef::from_id(process_id) };
+    let res = slot_ref.deque.is_empty();
+    slot_ref.into_id(); // prevent drop
+    res
+}
+
 // // Don't work because of lifetime issue
 // #[unsafe(no_mangle)]
 // pub extern "C" fn push_slot(queue_id: usize) -> Result<SlotGuard<'static, IPCItem>, ()> {
